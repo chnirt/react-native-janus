@@ -18,6 +18,10 @@ This is my source base when i integrate react native with react-native-webrtc
   cd react-native-webrtc/
 ```
 
+- edit Enable Bitcode: No
+
+  <img width="300px" src="./assets/image3.png" alt="Edit Info.plist">
+
 ### Prerequisites
 
 If you integrate to your new project, following below steps:

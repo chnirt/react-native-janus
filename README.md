@@ -24,11 +24,14 @@ If you integrate to your new project, following below steps:
 
 1. npm i react-native-webrtc
 2. edit Podfile, platform: ios >= 10.0
+   <br/>
    <img width="300px" src="./assets/image1.png" alt="Edit Podfile">
 3. cd ios && pod install
 4. edit Info.plist, add 2 permissions
+   <br/>
    <img width="300px" src="./assets/image2.png" alt="Edit Info.plist">
 5. edit Enable Bitcode: No
+   <br/>
    <img width="300px" src="./assets/image3.png" alt="Edit Info.plist">
 6. start ios or android
 

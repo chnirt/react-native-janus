@@ -6,21 +6,8 @@ This is my source base when i integrate react native with react-native-webrtc
 
 ## Getting Started
 
-- clone repository
-
-```
-  https://github.com/chnirt/react-native-webrtc.git
-```
-
-- cd into directory
-
-```
-  cd react-native-webrtc/
-```
-
-- edit Enable Bitcode: No
-
-  <img width="300px" src="./assets/image3.png" alt="Edit Info.plist">
+- [React Native](https://reactnative.dev/)
+- [WebRTC](https://webrtc.org/)
 
 ### Prerequisites
 
@@ -40,6 +27,22 @@ If you integrate to your new project, following below steps:
 6. start ios or android
 
 ### Installing
+
+- clone repository
+
+```
+  https://github.com/chnirt/react-native-webrtc.git
+```
+
+- cd into directory
+
+```
+  cd react-native-webrtc/
+```
+
+- edit Enable Bitcode: No
+
+  <img width="300px" src="./assets/image3.png" alt="Edit Info.plist">
 
 - install dependencies
 

@@ -78,7 +78,6 @@ const VideoScreen = props => {
 
   function janusStart() {
     setState(s => ({...s, visible: true}));
-    console.log('🥶', myusername);
     janus = new Janus({
       server,
       success: () => {

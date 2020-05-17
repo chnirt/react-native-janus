@@ -8,6 +8,7 @@
 
 import React, {Fragment, Component} from 'react';
 import {
+  ScrollView,
   TouchableOpacity,
   Alert,
   Button,
@@ -113,9 +114,9 @@ pc.onicecandidate = function(event) {
 };
 
 var sfutest = null;
-let host = '192.168.1.9';
+let host = '192.168.1.4';
 let server = 'http://' + host + ':8088/janus';
-let backHost = 'http://' + host + ':3000/stream';
+// let backHost = 'http://' + host + ':3000/stream';
 let pin = null;
 let myroom = null;
 let myid = null;
@@ -150,25 +151,48 @@ export default class JanusReactNative extends Component {
       videoMute: false,
       visible: false,
       buttonText: 'Start for Janus !!!',
+      incomingCall: false,
+      jsep: {},
     };
     this.janusStart.bind(this);
     this.onPressButton.bind(this);
   }
 
-  componentDidMount() {}
+  componentDidMount() {
+    // this.janusStart();
+  }
 
   janusStart = () => {
-    this.setState({visible: true});
+    this.setState({visible: true, status: 'ready'});
     janus = new Janus({
       server: server,
       success: () => {
         janus.attach({
-          plugin: 'janus.plugin.videoroom',
+          plugin: 'janus.plugin.videocall',
+          // camera_front: true,
           success: pluginHandle => {
             sfutest = pluginHandle;
-            this.requestStart().then(this.registerUsername);
-            // let register = { "request": "join", "room": 1234, "ptype": "publisher", "display": "yanhao", "id": 5035925950 };
-            // sfutest.send({ "message": register });
+            var body = {audio: true, video: true};
+            sfutest.send({message: body});
+            sfutest.createOffer({
+              // No media property provided: by default,
+              // it's sendrecv for audio and video
+              success: function(jsep) {
+                // Got our SDP! Send our OFFER to the plugin
+                sfutest.send({
+                  message: body,
+                  jsep: jsep,
+                });
+              },
+              error: function(error) {
+                // An error occurred...
+              },
+              customizeSdp: function(jsep) {
+                // if you want to modify the original sdp, do as the following
+                // oldSdp = jsep.sdp;
+                // jsep.sdp = yourNewSdp;
+              },
+            });
           },
           error: error => {
             Alert.alert('  -- Error attaching plugin...', error);
@@ -177,12 +201,22 @@ export default class JanusReactNative extends Component {
           mediaState: (medium, on) => {},
           webrtcState: on => {},
           onmessage: (msg, jsep) => {
-            var event = msg['videoroom'];
+            console.log('🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶', msg);
+            var event = msg['videocall'];
+            var result = msg['result'];
+            console.log(event, result);
+            if (result != undefined && result != null) {
+              if (result.event === 'incomingcall') {
+                this.setState({incomingCall: true});
+              }
+            }
             if (event != undefined && event != null) {
               if (event === 'joined') {
                 myid = msg['id'];
                 this.publishOwnFeed(true);
-                this.setState({visible: false});
+                this.setState({
+                  visible: false,
+                });
                 if (
                   msg['publishers'] !== undefined &&
                   msg['publishers'] !== null
@@ -191,7 +225,7 @@ export default class JanusReactNative extends Component {
                   for (var f in list) {
                     var id = list[f]['id'];
                     var display = list[f]['display'];
-                    // this.newRemoteFeed(id, display)
+                    this.newRemoteFeed(id, display);
                   }
                 }
               } else if (event === 'destroyed') {
@@ -204,7 +238,7 @@ export default class JanusReactNative extends Component {
                   for (var f in list) {
                     let id = list[f]['id'];
                     let display = list[f]['display'];
-                    // this.newRemoteFeed(id, display)
+                    this.newRemoteFeed(id, display);
                   }
                 } else if (
                   msg['leaving'] !== undefined &&
@@ -215,7 +249,9 @@ export default class JanusReactNative extends Component {
                   let numLeaving = parseInt(msg['leaving']);
                   if (this.state.remoteList.hasOwnProperty(numLeaving)) {
                     delete this.state.remoteList.numLeaving;
-                    this.setState({remoteList: this.state.remoteList});
+                    this.setState({
+                      remoteList: this.state.remoteList,
+                    });
                     this.state.remoteListPluginHandle[numLeaving].detach();
                     delete this.state.remoteListPluginHandle.numLeaving;
                   }
@@ -231,7 +267,9 @@ export default class JanusReactNative extends Component {
                   let numLeaving = parseInt(msg['unpublished']);
                   if ('numLeaving' in this.state.remoteList) {
                     delete this.state.remoteList.numLeaving;
-                    this.setState({remoteList: this.state.remoteList});
+                    this.setState({
+                      remoteList: this.state.remoteList,
+                    });
                     this.state.remoteListPluginHandle[numLeaving].detach();
                     delete this.state.remoteListPluginHandle.numLeaving;
                   }
@@ -243,12 +281,41 @@ export default class JanusReactNative extends Component {
               }
             }
             if (jsep !== undefined && jsep !== null) {
-              sfutest.handleRemoteJsep({jsep: jsep});
+              sfutest.handleRemoteJsep({
+                jsep: jsep,
+              });
+              // sfutest.createAnswer({
+              //   // We attach the remote OFFER
+              //   jsep: jsep,
+              //   // We want recvonly audio/video
+              //   media: {audioSend: false, videoSend: false},
+              //   success: function(ourjsep) {
+              //     // Got our SDP! Send our ANSWER to the plugin
+              //     // var body = {request: 'start'};
+              //     // sfutest.send({
+              //     //   message: body,
+              //     //   jsep: ourjsep,
+              //     // });
+              //     sfutest.send({
+              //       message: {
+              //         request: 'accept',
+              //       },
+              //       jsep: jsep,
+              //     });
+              //   },
+              //   error: function(error) {
+              //     // An error occurred...
+              //   },
+              // });
             }
           },
           onlocalstream: stream => {
-            this.setState({selfViewSrc: stream.toURL()});
-            this.setState({selfViewSrcKey: Math.floor(Math.random() * 1000)});
+            this.setState({
+              selfViewSrc: stream.toURL(),
+            });
+            this.setState({
+              selfViewSrcKey: Math.floor(Math.random() * 1000),
+            });
             this.setState({
               status: 'ready',
               info: 'Please enter or create room ID',
@@ -270,26 +337,144 @@ export default class JanusReactNative extends Component {
     });
   };
 
-  async registerUsername() {
-    console.log('register user name');
-    var username = 'yanhao';
+  registerUsername() {
+    console.log('❌❌❌❌❌❌❌❌❌register user name');
 
-    var register = {
-      request: 'join',
-      room: myroom,
-      ptype: 'publisher',
-      display: username,
-      pin: pin,
-      id: myid,
+    var body = {
+      request: 'register',
+      username: 'chin',
     };
-    sfutest.send({message: register});
-    var bitrate = 2000 * 1024;
-    sfutest.send({message: {request: 'configure', bitrate: bitrate}});
+    sfutest.send({
+      message: body,
+    });
   }
+
+  async callOffer() {
+    console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
+
+    var body = {
+      request: 'call',
+      username: 'hung',
+    };
+    sfutest.createOffer({
+      media: {
+        audioRecv: false,
+        videoRecv: false,
+        audioSend: true,
+        videoSend: true,
+        mandatory: {OfferToReceiveVideo: false, OfferToReceiveAudio: true},
+      },
+      success: jsep => {
+        // console.log('🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🚗🚗🚗🚗🚗');
+
+        // Janus.debug(jsep);
+        // console.log('Create offer : success \n');
+        // console.log(jsep.type);
+
+        sfutest.send({
+          message: body,
+          jsep: jsep,
+        });
+        // console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
+      },
+      error: error => {
+        Alert.alert('WebRTC error:', error);
+      },
+    });
+  }
+
+  async acceptAnswer() {
+    console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
+
+    sfutest.createAnswer({
+      media: {
+        audioRecv: false,
+        videoRecv: false,
+        audioSend: true,
+        videoSend: true,
+        mandatory: {OfferToReceiveVideo: false, OfferToReceiveAudio: true},
+      },
+      success: jsep => {
+        // console.log('Create offer : success \n');
+        // var publish = {
+        //   request: 'configure',
+        //   audio: useAudio,
+        //   video: true,
+        //   bitrate: 5000 * 1024,
+        // };
+        var body = {
+          request: 'accept',
+        };
+        sfutest.send({
+          message: body,
+          jsep: jsep,
+        });
+      },
+      error: error => {
+        Alert.alert('WebRTC error:', error);
+        // if (useAudio) {
+        //   this.publishOwnFeed(false);
+        // } else {
+        // }
+      },
+    });
+  }
+
+  onPressButton = () => {
+    if (!this.state.publish) {
+      this.janusStart();
+    } else {
+      this.unpublishOwnFeed();
+    }
+  };
+
+  switchVideoType = () => {
+    sfutest.changeLocalCamera();
+  };
+
+  toggleAudioMute = () => {
+    // this.props.App.test();
+    let muted = sfutest.isAudioMuted();
+    if (muted) {
+      sfutest.unmuteAudio();
+      this.setState({audioMute: false});
+    } else {
+      sfutest.muteAudio();
+      this.setState({audioMute: true});
+    }
+  };
+
+  toggleVideoMute = () => {
+    let muted = sfutest.isVideoMuted();
+    if (muted) {
+      this.setState({videoMute: false});
+      sfutest.unmuteVideo();
+    } else {
+      this.setState({videoMute: true});
+      sfutest.muteVideo();
+    }
+  };
+
+  toggleSpeaker = () => {
+    if (this.state.speaker) {
+      this.setState({speaker: false});
+      // InCallManager.setForceSpeakerphoneOn(false)
+    } else {
+      this.setState({speaker: true});
+      // InCallManager.setForceSpeakerphoneOn(true)
+    }
+  };
+
+  endCall = () => {
+    janus.destroy();
+  };
 
   publishOwnFeed(useAudio) {
     if (!this.state.publish) {
-      this.setState({publish: true, buttonText: 'Stop'});
+      this.setState({
+        publish: true,
+        buttonText: 'Stop',
+      });
 
       sfutest.createOffer({
         media: {
@@ -306,12 +491,15 @@ export default class JanusReactNative extends Component {
             video: true,
             bitrate: 5000 * 1024,
           };
-          sfutest.send({message: publish, jsep: jsep});
+          sfutest.send({
+            message: publish,
+            jsep: jsep,
+          });
         },
         error: error => {
           Alert.alert('WebRTC error:', error);
           if (useAudio) {
-            publishOwnFeed(false);
+            this.publishOwnFeed(false);
           } else {
           }
         },
@@ -323,39 +511,85 @@ export default class JanusReactNative extends Component {
     }
   }
 
-  async requestStart() {
-    await fetch(backHost, {
-      cache: 'no-cache',
-      credentials: 'omit',
-      headers: {
-        Accept: 'application/json, text/plain, */*',
-        'Content-Type': 'application/json',
+  newRemoteFeed(id, display) {
+    let remoteFeed = null;
+    janus.attach({
+      plugin: 'janus.plugin.videoroom',
+      success: pluginHandle => {
+        remoteFeed = pluginHandle;
+        let listen = {
+          request: 'join',
+          room: roomId,
+          ptype: 'listener',
+          feed: id,
+        };
+        remoteFeed.send({message: listen});
       },
-      method: 'POST',
-      body: JSON.stringify({
-        login: 'yanhao',
-        passwd: '1234',
-        roomid: 5555,
-        request: 'publish',
-      }),
-    })
-      .then(response => {
-        return response.json();
-      })
-      .then(data => {
-        console.log('parse response');
-        console.log(data);
-        if (data.status === 'success') {
-          myroom = data.key.room;
-          pin = data.key.pin;
-          myid = data.key.id;
+      error: error => {
+        Alert.alert('  -- Error attaching plugin...', error);
+      },
+      onmessage: (msg, jsep) => {
+        let event = msg['videoroom'];
+        if (event != undefined && event != null) {
+          if (event === 'attached') {
+            // Subscriber created and attached
+          }
         }
-      });
+        if (jsep !== undefined && jsep !== null) {
+          remoteFeed.createAnswer({
+            jsep: jsep,
+            media: {
+              audioSend: false,
+              videoSend: false,
+            },
+            success: jsep => {
+              var body = {
+                request: 'start',
+                room: roomId,
+              };
+              remoteFeed.send({
+                message: body,
+                jsep: jsep,
+              });
+            },
+            error: error => {
+              Alert.alert('WebRTC error:', error);
+            },
+          });
+        }
+      },
+      webrtcState: on => {},
+      onlocalstream: stream => {},
+      onremotestream: stream => {
+        this.setState({info: 'One peer join!'});
+        const remoteList = this.state.remoteList;
+        const remoteListPluginHandle = this.state.remoteListPluginHandle;
+        remoteList[id] = stream.toURL();
+        remoteListPluginHandle[id] = remoteFeed;
+        this.setState({
+          remoteList: remoteList,
+          remoteListPluginHandle: remoteListPluginHandle,
+        });
+      },
+      oncleanup: () => {
+        if (remoteFeed.spinner !== undefined && remoteFeed.spinner !== null)
+          remoteFeed.spinner.stop();
+        remoteFeed.spinner = null;
+        if (
+          bitrateTimer[remoteFeed.rfindex] !== null &&
+          bitrateTimer[remoteFeed.rfindex] !== null
+        )
+          clearInterval(bitrateTimer[remoteFeed.rfindex]);
+        bitrateTimer[remoteFeed.rfindex] = null;
+      },
+    });
   }
 
   unpublishOwnFeed() {
     if (this.state.publish) {
-      this.setState({buttonText: 'Start for Janus !!!'});
+      this.setState({
+        buttonText: 'Start for Janus !!!',
+      });
       let unpublish = {request: 'unpublish'};
       sfutest.send({message: unpublish});
       janus.destroy();
@@ -363,20 +597,49 @@ export default class JanusReactNative extends Component {
     }
   }
 
-  onPressButton = () => {
-    if (!this.state.publish) {
-      this.janusStart();
-    } else {
-      this.unpublishOwnFeed();
-    }
-  };
-
   render() {
     return (
-      <View style={styles.container}>
+      <ScrollView style={styles.container}>
+        <Text>{this.state.status}</Text>
+        {this.state.incomingCall && (
+          <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
+            <View style={styles.button}>
+              <Text style={styles.buttonText}>Accept</Text>
+            </View>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={this.onPressButton} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>{this.state.buttonText}</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.registerUsername} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>Register Username</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.callOffer} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>Call</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.switchVideoType} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>Switch camera</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.toggleAudioMute} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>
+              {this.state.audioMute ? 'audioMute' : 'not audioMute'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.toggleVideoMute} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>
+              {this.state.videoMute ? 'videoMute' : 'not videoMute'}
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -387,7 +650,17 @@ export default class JanusReactNative extends Component {
             style={{width: 350, height: 600}}
           />
         )}
-      </View>
+        {this.state.remoteList &&
+          Object.keys(this.state.remoteList).map((key, index) => {
+            return (
+              <RTCView
+                key={Math.floor(Math.random() * 1000)}
+                streamURL={this.state.remoteList[key]}
+                style={styles.remoteView}
+              />
+            );
+          })}
+      </ScrollView>
     );
   }
 }
@@ -395,7 +668,7 @@ export default class JanusReactNative extends Component {
 const styles = StyleSheet.create({
   container: {
     paddingTop: 60,
-    alignItems: 'center',
+    // alignItems: 'center',
   },
   button: {
     marginBottom: 30,

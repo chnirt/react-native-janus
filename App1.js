@@ -114,7 +114,7 @@ pc.onicecandidate = function(event) {
 };
 
 var sfutest = null;
-let host = '192.168.1.4';
+let host = '192.168.1.6';
 let server = 'http://' + host + ':8088/janus';
 // let backHost = 'http://' + host + ':3000/stream';
 let pin = null;
@@ -140,6 +140,8 @@ export default class JanusReactNative extends Component {
       isFront: true,
       selfViewSrc: null,
       selfViewSrcKey: null,
+      remoteViewSrc: null,
+      remoteViewSrcKey: null,
       remoteList: {},
       remoteListPluginHandle: {},
       textRoomConnected: false,
@@ -156,6 +158,7 @@ export default class JanusReactNative extends Component {
     };
     this.janusStart.bind(this);
     this.onPressButton.bind(this);
+    this.endCall.bind(this);
   }
 
   componentDidMount() {
@@ -163,7 +166,7 @@ export default class JanusReactNative extends Component {
   }
 
   janusStart = () => {
-    this.setState({visible: true, status: 'ready'});
+    this.setState({visible: true});
     janus = new Janus({
       server: server,
       success: () => {
@@ -172,15 +175,23 @@ export default class JanusReactNative extends Component {
           // camera_front: true,
           success: pluginHandle => {
             sfutest = pluginHandle;
-            var body = {audio: true, video: true};
-            sfutest.send({message: body});
+            this.registerUsername();
+            // var body = {audio: true, video: true};
+            // sfutest.send({message: body});
             sfutest.createOffer({
               // No media property provided: by default,
               // it's sendrecv for audio and video
               success: function(jsep) {
                 // Got our SDP! Send our OFFER to the plugin
+                // sfutest.send({
+                //   message: body,
+                //   jsep: jsep,
+                // });
                 sfutest.send({
-                  message: body,
+                  message: {
+                    request: 'call',
+                    username: 'hung',
+                  },
                   jsep: jsep,
                 });
               },
@@ -281,32 +292,32 @@ export default class JanusReactNative extends Component {
               }
             }
             if (jsep !== undefined && jsep !== null) {
-              sfutest.handleRemoteJsep({
-                jsep: jsep,
-              });
-              // sfutest.createAnswer({
-              //   // We attach the remote OFFER
+              // sfutest.handleRemoteJsep({
               //   jsep: jsep,
-              //   // We want recvonly audio/video
-              //   media: {audioSend: false, videoSend: false},
-              //   success: function(ourjsep) {
-              //     // Got our SDP! Send our ANSWER to the plugin
-              //     // var body = {request: 'start'};
-              //     // sfutest.send({
-              //     //   message: body,
-              //     //   jsep: ourjsep,
-              //     // });
-              //     sfutest.send({
-              //       message: {
-              //         request: 'accept',
-              //       },
-              //       jsep: jsep,
-              //     });
-              //   },
-              //   error: function(error) {
-              //     // An error occurred...
-              //   },
               // });
+              sfutest.createAnswer({
+                // We attach the remote OFFER
+                jsep: jsep,
+                // We want recvonly audio/video
+                media: {audioSend: false, videoSend: false},
+                success: function(ourjsep) {
+                  // Got our SDP! Send our ANSWER to the plugin
+                  // var body = {request: 'start'};
+                  // sfutest.send({
+                  //   message: body,
+                  //   jsep: ourjsep,
+                  // });
+                  sfutest.send({
+                    message: {
+                      request: 'accept',
+                    },
+                    jsep: jsep,
+                  });
+                },
+                error: function(error) {
+                  // An error occurred...
+                },
+              });
             }
           },
           onlocalstream: stream => {
@@ -318,10 +329,16 @@ export default class JanusReactNative extends Component {
             });
             this.setState({
               status: 'ready',
-              info: 'Please enter or create room ID',
             });
           },
-          onremotestream: stream => {},
+          onremotestream: stream => {
+            this.setState({
+              remoteViewSrc: stream.toURL(),
+            });
+            this.setState({
+              remoteViewSrcKey: Math.floor(Math.random() * 1000),
+            });
+          },
           oncleanup: () => {
             mystream = null;
           },
@@ -340,48 +357,49 @@ export default class JanusReactNative extends Component {
   registerUsername() {
     console.log('❌❌❌❌❌❌❌❌❌register user name');
 
-    var body = {
-      request: 'register',
-      username: 'chin',
-    };
     sfutest.send({
-      message: body,
+      message: {
+        request: 'register',
+        username: 'chin',
+      },
     });
   }
 
-  async callOffer() {
+  callOffer = () => {
     console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
 
-    var body = {
-      request: 'call',
-      username: 'hung',
-    };
-    sfutest.createOffer({
+    var hello = sfutest.createOffer({
       media: {
         audioRecv: false,
         videoRecv: false,
         audioSend: true,
         videoSend: true,
-        mandatory: {OfferToReceiveVideo: false, OfferToReceiveAudio: true},
       },
       success: jsep => {
-        // console.log('🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🚗🚗🚗🚗🚗');
+        console.log('🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🚗🚗🚗🚗🚗');
 
         // Janus.debug(jsep);
         // console.log('Create offer : success \n');
         // console.log(jsep.type);
 
         sfutest.send({
-          message: body,
+          message: {
+            request: 'call',
+            username: 'hung',
+          },
           jsep: jsep,
         });
-        // console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
+        console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
       },
       error: error => {
         Alert.alert('WebRTC error:', error);
       },
     });
-  }
+
+    console.log('asdasdwqeqw', hello);
+
+    console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
+  };
 
   async acceptAnswer() {
     console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
@@ -466,7 +484,10 @@ export default class JanusReactNative extends Component {
   };
 
   endCall = () => {
+    let unpublish = {request: 'unpublish'};
+    sfutest.send({message: unpublish});
     janus.destroy();
+    this.setState({selfViewSrc: null, remoteViewSrc: null});
   };
 
   publishOwnFeed(useAudio) {
@@ -618,6 +639,11 @@ export default class JanusReactNative extends Component {
             <Text style={styles.buttonText}>Register Username</Text>
           </View>
         </TouchableOpacity>
+        <TouchableOpacity onPress={this.endCall} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>End</Text>
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity onPress={this.callOffer} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>Call</Text>
@@ -647,6 +673,13 @@ export default class JanusReactNative extends Component {
           <RTCView
             key={this.state.selfViewSrcKey}
             streamURL={this.state.selfViewSrc}
+            style={{width: 350, height: 600}}
+          />
+        )}
+        {this.state.remoteViewSrc && (
+          <RTCView
+            key={this.state.remoteViewSrcKey}
+            streamURL={this.state.remoteViewSrc}
             style={{width: 350, height: 600}}
           />
         )}

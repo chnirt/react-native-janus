@@ -113,15 +113,24 @@ pc.onicecandidate = function(event) {
   // send event.candidate to peer
 };
 
-var sfutest = null;
-let host = '172.16.1.22';
+let host = '172.16.9.91';
 let server = 'http://' + host + ':8088/janus';
 // let backHost = 'http://' + host + ':3000/stream';
-let pin = null;
-let myroom = null;
-let myid = null;
-let janus = null;
+
 let jsep = null;
+
+var janus = null;
+var videocall = null;
+// var opaqueId = 'videocalltest-' + Janus.randomString(12);
+
+var bitrateTimer = null;
+var spinner = null;
+
+var audioenabled = false;
+var videoenabled = false;
+
+var myusername = null;
+var yourusername = null;
 
 Janus.init({
   debug: 'all',
@@ -173,76 +182,181 @@ export default class JanusReactNative extends Component {
       success: () => {
         janus.attach({
           plugin: 'janus.plugin.videocall',
+          // opaqueId: opaqueId,
           success: pluginHandle => {
-            sfutest = pluginHandle;
+            videocall = pluginHandle;
           },
           error: error => {
+            Janus.error('  -- Error attaching plugin...', error);
             Alert.alert('  -- Error attaching plugin...', error);
           },
-          consentDialog: on => {},
-          mediaState: (medium, on) => {},
-          webrtcState: on => {},
+          consentDialog: on => {
+            Janus.debug(
+              'Consent dialog should be ' + (on ? 'on' : 'off') + ' now',
+            );
+          },
+          mediaState: (medium, on) => {
+            Janus.log(
+              'Janus ' +
+                (on ? 'started' : 'stopped') +
+                ' receiving our ' +
+                medium,
+            );
+          },
+          webrtcState: on => {
+            Janus.log(
+              'Janus says our WebRTC PeerConnection is ' +
+                (on ? 'up' : 'down') +
+                ' now',
+            );
+          },
           onmessage: (msg, jsep) => {
-            console.log('🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶', msg);
-            var event = msg['videocall'];
+            Janus.debug(' ::: Got a message :::');
+            Janus.debug(msg);
             var result = msg['result'];
-            console.log(event, result, jsep);
-            if (result != undefined && result != null) {
-              if (result.event === 'incomingcall') {
-                this.setState({incomingCall: true, status: 'incomingcall'});
+            if (result !== undefined && result !== null) {
+              if (result['list'] !== undefined && result['list'] !== null) {
+                var list = result['list'];
+                Janus.debug('Got a list of registered peers:');
+                Janus.debug(list);
+                for (var mp in list) {
+                  Janus.debug('  >> [' + list[mp] + ']');
+                }
+              } else if (
+                result['event'] !== undefined &&
+                result['event'] !== null
+              ) {
+                var event = result['event'];
+                if (event === 'registered') {
+                  myusername = result['username'];
+                  Janus.log('Successfully registered as ' + myusername + '!');
+                } else if (event === 'calling') {
+                  Janus.log('Waiting for the peer to answer...');
+                  // TODO Any ringtone?
+                  Alert.alert('Waiting for the peer to answer...');
+                } else if (event === 'incomingcall') {
+                  Janus.log('Incoming call from ' + result['username'] + '!');
+                  yourusername = result['username'];
+                  // jsep = jsep;
 
-                sfutest.createAnswer({
-                  // We attach the remote OFFER
-                  jsep: jsep,
-                  // We want recvonly audio/video
-                  media: {audioSend: false, videoSend: false},
-                  success: function(ourjsep) {
-                    // Got our SDP! Send our ANSWER to the plugin
-                    sfutest.send({
-                      message: {
+                  console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
+
+                  videocall.createAnswer({
+                    jsep: jsep,
+                    media: {data: true},
+                    success: function(jsep) {
+                      Janus.debug('Got SDP!');
+                      Janus.debug(jsep);
+                      var body = {
                         request: 'accept',
-                        // username: 'hung',
-                      },
-                      jsep: ourjsep,
-                    });
-                  },
-                  error: function(error) {
-                    // An error occurred...
-                  },
-                });
+                      };
+                      videocall.send({
+                        message: body,
+                        jsep: jsep,
+                      });
+                    },
+                    error: function(error) {
+                      Janus.error('WebRTC error:', error);
+                    },
+                  });
+                  console.log('🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀');
+                } else if (event === 'accepted') {
+                  var peer = result['username'];
+                  if (peer === null || peer === undefined) {
+                    Janus.log('Call started!');
+                  } else {
+                    Janus.log(peer + ' accepted the call!');
+                    yourusername = peer;
+                  }
+                  // Video call can start
+                  if (jsep) videocall.handleRemoteJsep({jsep: jsep});
+                } else if (event === 'update') {
+                  // An 'update' event may be used to provide renegotiation attempts
+                  if (jsep) {
+                    if (jsep.type === 'answer') {
+                      videocall.handleRemoteJsep({jsep: jsep});
+                    } else {
+                      videocall.createAnswer({
+                        jsep: jsep,
+                        media: {data: true}, // Let's negotiate data channels as well
+                        success: function(jsep) {
+                          Janus.debug('Got SDP!');
+                          Janus.debug(jsep);
+                          var body = {request: 'set'};
+                          videocall.send({
+                            message: body,
+                            jsep: jsep,
+                          });
+                        },
+                        error: function(error) {
+                          Janus.error('WebRTC error:', error);
+                          Alert.alert(
+                            'WebRTC error... ' + JSON.stringify(error),
+                          );
+                        },
+                      });
+                    }
+                  }
+                } else if (event === 'hangup') {
+                  Janus.log(
+                    'Call hung up by ' +
+                      result['username'] +
+                      ' (' +
+                      result['reason'] +
+                      ')!',
+                  );
+                  // Reset status
+                  this.endCall();
+                }
               }
-              if (result.event === 'hangup') {
-                this.endCall();
-              }
+            } else {
+              // FIXME Error?
+              var error = msg['error'];
+              Alert.alert(error);
+              // TODO Reset status
+              videocall.hangup();
             }
-            if (jsep !== undefined && jsep !== null) {
-              jsep = jsep;
-              if (jsep.type === 'answer') {
-                sfutest.handleRemoteJsep({
-                  jsep: jsep,
-                });
-              } else {
-                sfutest.createAnswer({
-                  // We attach the remote OFFER
-                  jsep: jsep,
-                  // We want recvonly audio/video
-                  media: {audioSend: false, videoSend: false},
-                  success: function(ourjsep) {
-                    // Got our SDP! Send our ANSWER to the plugin
-                    sfutest.send({
-                      message: {request: 'start'},
-                      jsep: ourjsep,
-                    });
-                  },
-                  error: function(error) {
-                    // An error occurred...
-                  },
-                });
-              }
-            }
+            // if (jsep !== undefined && jsep !== null) {
+            //   if (jsep.type === 'answer') {
+            //     sfutest.handleRemoteJsep({
+            //       jsep: jsep,
+            //     });
+            //   } else {
+            //     console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨', jsep);
+            //     sfutest.createAnswer({
+            //       // We attach the remote OFFER
+            //       jsep: jsep,
+            //       // We want recvonly audio/video
+            //       // media: {audioSend: true, videoSend: true},
+            //       success: function(ourjsep) {
+            //         // Got our SDP! Send our ANSWER to the plugin
+            //         // sfutest.send({
+            //         //   message: {request: 'set'},
+            //         //   jsep: ourjsep,
+            //         // });
+            //         sfutest.send({
+            //           message: {
+            //             request: 'set',
+            //           },
+            //           jsep: ourjsep,
+            //         });
+            //       },
+            //       error: function(error) {
+            //         // An error occurred...
+            //       },
+            //     });
+            //   }
+            // }
           },
           onlocalstream: stream => {
             console.log('🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓');
+            Janus.debug(' ::: Got a local stream :::');
+            Janus.debug(stream);
+
+            // Janus.attachMediaStream($('#myvideo').get(0), stream);
+
+            var videoTracks = stream.getVideoTracks();
+
             this.setState({
               selfViewSrc: stream.toURL(),
               selfViewSrcKey: Math.floor(Math.random() * 1000),
@@ -275,7 +389,7 @@ export default class JanusReactNative extends Component {
   registerUsername() {
     console.log('❌❌❌❌❌❌❌❌❌register user name');
 
-    sfutest.send({
+    videocall.send({
       message: {
         request: 'register',
         username: 'chin',
@@ -286,12 +400,12 @@ export default class JanusReactNative extends Component {
   callOffer = () => {
     console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
 
-    sfutest.createOffer({
+    videocall.createOffer({
       // No media property provided: by default,
       // it's sendrecv for audio and video
       success: function(ourjsep) {
         // Got our SDP! Send our OFFER to the plugin
-        sfutest.send({
+        videocall.send({
           message: {
             request: 'call',
             username: 'hung',
@@ -313,26 +427,46 @@ export default class JanusReactNative extends Component {
   acceptAnswer = () => {
     console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
 
-    sfutest.createAnswer({
-      // We attach the remote OFFER
+    videocall.createAnswer({
       jsep: jsep,
-      // We want recvonly audio/video
-      media: {audioSend: false, videoSend: false},
-      success: function(ourjsep) {
-        // Got our SDP! Send our ANSWER to the plugin
-        // sfutest.send({
-        //   message: {
-        //     request: 'accept',
-        //     // username: 'hung',
-        //   },
-        //   // message: {request: 'start'},
-        //   jsep: ourjsep,
-        // });
+      media: {data: true},
+      success: function(jsep) {
+        Janus.debug('Got SDP!');
+        Janus.debug(jsep);
+        var body = {
+          request: 'accept',
+        };
+        videocall.send({
+          message: body,
+          jsep: jsep,
+        });
       },
       error: function(error) {
-        // An error occurred...
+        Janus.error('WebRTC error:', error);
       },
     });
+
+    // videocall.createAnswer({
+    //   // We attach the remote OFFER
+    //   jsep: jsep,
+    //   // We want recvonly audio/video
+    //   media: {audioSend: false, videoSend: false},
+    //   success: function(ourjsep) {
+    //     // Got our SDP! Send our ANSWER to the plugin
+
+    //     videocall.send({
+    //       message: {
+    //         request: 'accept',
+    //         // username: 'hung',
+    //       },
+    //       // message: {request: 'start'},
+    //       jsep: ourjsep,
+    //     });
+    //   },
+    //   error: function(error) {
+    //     // An error occurred...
+    //   },
+    // });
   };
 
   onPressButton = () => {
@@ -344,29 +478,29 @@ export default class JanusReactNative extends Component {
   };
 
   switchVideoType = () => {
-    sfutest.changeLocalCamera();
+    videocall.changeLocalCamera();
   };
 
   toggleAudioMute = () => {
     // this.props.App.test();
-    let muted = sfutest.isAudioMuted();
+    let muted = videocall.isAudioMuted();
     if (muted) {
-      sfutest.unmuteAudio();
+      videocall.unmuteAudio();
       this.setState({audioMute: false});
     } else {
-      sfutest.muteAudio();
+      videocall.muteAudio();
       this.setState({audioMute: true});
     }
   };
 
   toggleVideoMute = () => {
-    let muted = sfutest.isVideoMuted();
+    let muted = videocall.isVideoMuted();
     if (muted) {
       this.setState({videoMute: false});
-      sfutest.unmuteVideo();
+      videocall.unmuteVideo();
     } else {
       this.setState({videoMute: true});
-      sfutest.muteVideo();
+      videocall.muteVideo();
     }
   };
 
@@ -381,137 +515,9 @@ export default class JanusReactNative extends Component {
   };
 
   endCall = () => {
-    sfutest.hangup();
+    videocall.hangup();
     this.setState({selfViewSrc: null, remoteViewSrc: null, status: 'hangup'});
   };
-
-  publishOwnFeed(useAudio) {
-    if (!this.state.publish) {
-      this.setState({
-        publish: true,
-        buttonText: 'Stop',
-      });
-
-      sfutest.createOffer({
-        media: {
-          audioRecv: false,
-          videoRecv: false,
-          audioSend: useAudio,
-          videoSend: true,
-        },
-        success: jsep => {
-          console.log('Create offer : success \n');
-          var publish = {
-            request: 'configure',
-            audio: useAudio,
-            video: true,
-            bitrate: 5000 * 1024,
-          };
-          sfutest.send({
-            message: publish,
-            jsep: jsep,
-          });
-        },
-        error: error => {
-          Alert.alert('WebRTC error:', error);
-          if (useAudio) {
-            this.publishOwnFeed(false);
-          } else {
-          }
-        },
-      });
-    } else {
-      // this.setState({ publish: false });
-      // let unpublish = { "request": "unpublish" };
-      // sfutest.send({"message": unpublish});
-    }
-  }
-
-  newRemoteFeed(id, display) {
-    let remoteFeed = null;
-    janus.attach({
-      plugin: 'janus.plugin.videoroom',
-      success: pluginHandle => {
-        remoteFeed = pluginHandle;
-        let listen = {
-          request: 'join',
-          room: roomId,
-          ptype: 'listener',
-          feed: id,
-        };
-        remoteFeed.send({message: listen});
-      },
-      error: error => {
-        Alert.alert('  -- Error attaching plugin...', error);
-      },
-      onmessage: (msg, jsep) => {
-        let event = msg['videoroom'];
-        if (event != undefined && event != null) {
-          if (event === 'attached') {
-            // Subscriber created and attached
-          }
-        }
-        if (jsep !== undefined && jsep !== null) {
-          remoteFeed.createAnswer({
-            jsep: jsep,
-            media: {
-              audioSend: false,
-              videoSend: false,
-            },
-            success: jsep => {
-              var body = {
-                request: 'start',
-                room: roomId,
-              };
-              remoteFeed.send({
-                message: body,
-                jsep: jsep,
-              });
-            },
-            error: error => {
-              Alert.alert('WebRTC error:', error);
-            },
-          });
-        }
-      },
-      webrtcState: on => {},
-      onlocalstream: stream => {},
-      onremotestream: stream => {
-        this.setState({info: 'One peer join!'});
-        const remoteList = this.state.remoteList;
-        const remoteListPluginHandle = this.state.remoteListPluginHandle;
-        remoteList[id] = stream.toURL();
-        remoteListPluginHandle[id] = remoteFeed;
-        this.setState({
-          remoteList: remoteList,
-          remoteListPluginHandle: remoteListPluginHandle,
-        });
-      },
-      oncleanup: () => {
-        if (remoteFeed.spinner !== undefined && remoteFeed.spinner !== null)
-          remoteFeed.spinner.stop();
-        remoteFeed.spinner = null;
-        if (
-          bitrateTimer[remoteFeed.rfindex] !== null &&
-          bitrateTimer[remoteFeed.rfindex] !== null
-        )
-          clearInterval(bitrateTimer[remoteFeed.rfindex]);
-        bitrateTimer[remoteFeed.rfindex] = null;
-      },
-    });
-  }
-
-  unpublishOwnFeed() {
-    if (this.state.publish) {
-      this.setState({
-        buttonText: 'Start for Janus !!!',
-      });
-      let unpublish = {request: 'unpublish'};
-      sfutest.send({message: unpublish});
-      janus.destroy();
-      this.setState({selfViewSrc: null});
-    }
-  }
 
   render() {
     return (

@@ -316,46 +316,11 @@ export default class JanusReactNative extends Component {
               // TODO Reset status
               videocall.hangup();
             }
-            // if (jsep !== undefined && jsep !== null) {
-            //   if (jsep.type === 'answer') {
-            //     sfutest.handleRemoteJsep({
-            //       jsep: jsep,
-            //     });
-            //   } else {
-            //     console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨', jsep);
-            //     sfutest.createAnswer({
-            //       // We attach the remote OFFER
-            //       jsep: jsep,
-            //       // We want recvonly audio/video
-            //       // media: {audioSend: true, videoSend: true},
-            //       success: function(ourjsep) {
-            //         // Got our SDP! Send our ANSWER to the plugin
-            //         // sfutest.send({
-            //         //   message: {request: 'set'},
-            //         //   jsep: ourjsep,
-            //         // });
-            //         sfutest.send({
-            //           message: {
-            //             request: 'set',
-            //           },
-            //           jsep: ourjsep,
-            //         });
-            //       },
-            //       error: function(error) {
-            //         // An error occurred...
-            //       },
-            //     });
-            //   }
-            // }
           },
           onlocalstream: stream => {
             console.log('🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓');
             Janus.debug(' ::: Got a local stream :::');
             Janus.debug(stream);
-
-            // Janus.attachMediaStream($('#myvideo').get(0), stream);
-
-            var videoTracks = stream.getVideoTracks();
 
             this.setState({
               selfViewSrc: stream.toURL(),
@@ -365,22 +330,31 @@ export default class JanusReactNative extends Component {
           },
           onremotestream: stream => {
             console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩', stream);
+
             this.setState({
               remoteViewSrc: stream.toURL(),
               remoteViewSrcKey: Math.floor(Math.random() * 1000),
               status: 'connecting',
             });
           },
-          oncleanup: () => {
-            mystream = null;
+          ondataopen: function(data) {
+            Janus.log('The DataChannel is available!');
+          },
+          ondata: function(data) {
+            Janus.debug('We got data from the DataChannel! ' + data);
+          },
+          oncleanup: function() {
+            Janus.log(' ::: Got a cleanup notification :::');
+            yourusername = null;
           },
         });
       },
       error: error => {
+        Janus.error('  Janus Error', error);
         Alert.alert('  Janus Error', error);
       },
       destroyed: () => {
-        // Alert.alert("  Success for End Call ");
+        Alert.alert('  Success for End Call ');
         this.setState({publish: false});
       },
     });
@@ -389,37 +363,25 @@ export default class JanusReactNative extends Component {
   registerUsername() {
     console.log('❌❌❌❌❌❌❌❌❌register user name');
 
-    videocall.send({
-      message: {
-        request: 'register',
-        username: 'chin',
-      },
-    });
+    var register = {request: 'register', username: 'chin'};
+    videocall.send({message: register});
   }
 
   callOffer = () => {
     console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
 
+    // Call this user
     videocall.createOffer({
-      // No media property provided: by default,
-      // it's sendrecv for audio and video
-      success: function(ourjsep) {
-        // Got our SDP! Send our OFFER to the plugin
-        videocall.send({
-          message: {
-            request: 'call',
-            username: 'hung',
-          },
-          jsep: ourjsep,
-        });
+      media: {data: true}, // ... let's negotiate data channels as well
+      success: function(jsep) {
+        Janus.debug('Got SDP!');
+        Janus.debug(jsep);
+        var body = {request: 'call', username: 'hung'};
+        videocall.send({message: body, jsep: jsep});
       },
       error: function(error) {
-        // An error occurred...
-      },
-      customizeSdp: function(ourjsep) {
-        // if you want to modify the original sdp, do as the following
-        // oldSdp = jsep.sdp;
-        // jsep.sdp = yourNewSdp;
+        Janus.error('WebRTC error...', error);
+        Alert.alert('WebRTC error... ' + error);
       },
     });
   };
@@ -445,28 +407,6 @@ export default class JanusReactNative extends Component {
         Janus.error('WebRTC error:', error);
       },
     });
-
-    // videocall.createAnswer({
-    //   // We attach the remote OFFER
-    //   jsep: jsep,
-    //   // We want recvonly audio/video
-    //   media: {audioSend: false, videoSend: false},
-    //   success: function(ourjsep) {
-    //     // Got our SDP! Send our ANSWER to the plugin
-
-    //     videocall.send({
-    //       message: {
-    //         request: 'accept',
-    //         // username: 'hung',
-    //       },
-    //       // message: {request: 'start'},
-    //       jsep: ourjsep,
-    //     });
-    //   },
-    //   error: function(error) {
-    //     // An error occurred...
-    //   },
-    // });
   };
 
   onPressButton = () => {
@@ -482,7 +422,6 @@ export default class JanusReactNative extends Component {
   };
 
   toggleAudioMute = () => {
-    // this.props.App.test();
     let muted = videocall.isAudioMuted();
     if (muted) {
       videocall.unmuteAudio();
@@ -507,15 +446,16 @@ export default class JanusReactNative extends Component {
   toggleSpeaker = () => {
     if (this.state.speaker) {
       this.setState({speaker: false});
-      // InCallManager.setForceSpeakerphoneOn(false)
     } else {
       this.setState({speaker: true});
-      // InCallManager.setForceSpeakerphoneOn(true)
     }
   };
 
   endCall = () => {
+    var hangup = {request: 'hangup'};
+    videocall.send({message: hangup});
     videocall.hangup();
+    yourusername = null;
     this.setState({selfViewSrc: null, remoteViewSrc: null, status: 'hangup'});
   };
 
@@ -523,18 +463,13 @@ export default class JanusReactNative extends Component {
     return (
       <ScrollView style={styles.container}>
         <Text>{this.state.status}</Text>
-        {/* {this.state.incomingCall && (
+        {this.state.incomingCall && (
           <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
             <View style={styles.button}>
               <Text style={styles.buttonText}>Accept</Text>
             </View>
           </TouchableOpacity>
-        )} */}
-        <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>Accept</Text>
-          </View>
-        </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={this.onPressButton} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>{this.state.buttonText}</Text>

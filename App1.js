@@ -114,7 +114,7 @@ pc.onicecandidate = function(event) {
 };
 
 var sfutest = null;
-let host = '192.168.1.6';
+let host = '172.16.1.22';
 let server = 'http://' + host + ':8088/janus';
 // let backHost = 'http://' + host + ':3000/stream';
 let pin = null;
@@ -175,35 +175,31 @@ export default class JanusReactNative extends Component {
           // camera_front: true,
           success: pluginHandle => {
             sfutest = pluginHandle;
-            this.registerUsername();
+            // this.registerUsername();
             // var body = {audio: true, video: true};
             // sfutest.send({message: body});
-            sfutest.createOffer({
-              // No media property provided: by default,
-              // it's sendrecv for audio and video
-              success: function(jsep) {
-                // Got our SDP! Send our OFFER to the plugin
-                // sfutest.send({
-                //   message: body,
-                //   jsep: jsep,
-                // });
-                sfutest.send({
-                  message: {
-                    request: 'call',
-                    username: 'hung',
-                  },
-                  jsep: jsep,
-                });
-              },
-              error: function(error) {
-                // An error occurred...
-              },
-              customizeSdp: function(jsep) {
-                // if you want to modify the original sdp, do as the following
-                // oldSdp = jsep.sdp;
-                // jsep.sdp = yourNewSdp;
-              },
-            });
+            // sfutest.createOffer({
+            //   // No media property provided: by default,
+            //   // it's sendrecv for audio and video
+            //   success: function(jsep) {
+            //     // Got our SDP! Send our OFFER to the plugin
+            //     sfutest.send({
+            //       message: {
+            //         request: 'call',
+            //         username: 'hung',
+            //       },
+            //       jsep: jsep,
+            //     });
+            //   },
+            //   error: function(error) {
+            //     // An error occurred...
+            //   },
+            //   customizeSdp: function(jsep) {
+            //     // if you want to modify the original sdp, do as the following
+            //     // oldSdp = jsep.sdp;
+            //     // jsep.sdp = yourNewSdp;
+            //   },
+            // });
           },
           error: error => {
             Alert.alert('  -- Error attaching plugin...', error);
@@ -292,31 +288,8 @@ export default class JanusReactNative extends Component {
               }
             }
             if (jsep !== undefined && jsep !== null) {
-              // sfutest.handleRemoteJsep({
-              //   jsep: jsep,
-              // });
-              sfutest.createAnswer({
-                // We attach the remote OFFER
+              sfutest.handleRemoteJsep({
                 jsep: jsep,
-                // We want recvonly audio/video
-                media: {audioSend: false, videoSend: false},
-                success: function(ourjsep) {
-                  // Got our SDP! Send our ANSWER to the plugin
-                  // var body = {request: 'start'};
-                  // sfutest.send({
-                  //   message: body,
-                  //   jsep: ourjsep,
-                  // });
-                  sfutest.send({
-                    message: {
-                      request: 'accept',
-                    },
-                    jsep: jsep,
-                  });
-                },
-                error: function(error) {
-                  // An error occurred...
-                },
               });
             }
           },
@@ -332,11 +305,15 @@ export default class JanusReactNative extends Component {
             });
           },
           onremotestream: stream => {
+            console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩');
             this.setState({
               remoteViewSrc: stream.toURL(),
             });
             this.setState({
               remoteViewSrcKey: Math.floor(Math.random() * 1000),
+            });
+            this.setState({
+              status: 'connecting',
             });
           },
           oncleanup: () => {
@@ -368,20 +345,13 @@ export default class JanusReactNative extends Component {
   callOffer = () => {
     console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
 
-    var hello = sfutest.createOffer({
-      media: {
-        audioRecv: false,
-        videoRecv: false,
-        audioSend: true,
-        videoSend: true,
-      },
-      success: jsep => {
-        console.log('🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🥇🚗🚗🚗🚗🚗');
-
-        // Janus.debug(jsep);
-        // console.log('Create offer : success \n');
-        // console.log(jsep.type);
-
+    sfutest.createOffer({
+      // No media property provided: by default,
+      // it's sendrecv for audio and video
+      success: function(jsep) {
+        // Got our SDP! Send our OFFER to the plugin
+        var body = {audio: true, video: true};
+        sfutest.send({message: body});
         sfutest.send({
           message: {
             request: 'call',
@@ -389,54 +359,48 @@ export default class JanusReactNative extends Component {
           },
           jsep: jsep,
         });
-        console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
       },
-      error: error => {
-        Alert.alert('WebRTC error:', error);
+      error: function(error) {
+        // An error occurred...
+      },
+      customizeSdp: function(jsep) {
+        // if you want to modify the original sdp, do as the following
+        // oldSdp = jsep.sdp;
+        // jsep.sdp = yourNewSdp;
       },
     });
-
-    console.log('asdasdwqeqw', hello);
-
-    console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
   };
 
-  async acceptAnswer() {
+  acceptAnswer = () => {
     console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
 
     sfutest.createAnswer({
-      media: {
-        audioRecv: false,
-        videoRecv: false,
-        audioSend: true,
-        videoSend: true,
-        mandatory: {OfferToReceiveVideo: false, OfferToReceiveAudio: true},
+      // No media property provided: by default,
+      // it's sendrecv for audio and video
+      success: function(jsep) {
+        // Got our SDP! Send our OFFER to the plugin
+        // sfutest.send({
+        //   message: body,
+        //   jsep: jsep,
+        // });
+        // sfutest.send({
+        //   message: {
+        //     request: 'accept',
+        //     // username: 'hung',
+        //   },
+        //   jsep: jsep,
+        // });
       },
-      success: jsep => {
-        // console.log('Create offer : success \n');
-        // var publish = {
-        //   request: 'configure',
-        //   audio: useAudio,
-        //   video: true,
-        //   bitrate: 5000 * 1024,
-        // };
-        var body = {
-          request: 'accept',
-        };
-        sfutest.send({
-          message: body,
-          jsep: jsep,
-        });
+      error: function(error) {
+        // An error occurred...
       },
-      error: error => {
-        Alert.alert('WebRTC error:', error);
-        // if (useAudio) {
-        //   this.publishOwnFeed(false);
-        // } else {
-        // }
+      customizeSdp: function(jsep) {
+        // if you want to modify the original sdp, do as the following
+        // oldSdp = jsep.sdp;
+        // jsep.sdp = yourNewSdp;
       },
     });
-  }
+  };
 
   onPressButton = () => {
     if (!this.state.publish) {
@@ -639,14 +603,14 @@ export default class JanusReactNative extends Component {
             <Text style={styles.buttonText}>Register Username</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={this.endCall} underlayColor="white">
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>End</Text>
-          </View>
-        </TouchableOpacity>
         <TouchableOpacity onPress={this.callOffer} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>Call</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.endCall} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>End</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={this.switchVideoType} underlayColor="white">

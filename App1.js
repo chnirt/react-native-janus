@@ -121,6 +121,7 @@ let pin = null;
 let myroom = null;
 let myid = null;
 let janus = null;
+let jsep = null;
 
 Janus.init({
   debug: 'all',
@@ -172,34 +173,8 @@ export default class JanusReactNative extends Component {
       success: () => {
         janus.attach({
           plugin: 'janus.plugin.videocall',
-          // camera_front: true,
           success: pluginHandle => {
             sfutest = pluginHandle;
-            // this.registerUsername();
-            // var body = {audio: true, video: true};
-            // sfutest.send({message: body});
-            // sfutest.createOffer({
-            //   // No media property provided: by default,
-            //   // it's sendrecv for audio and video
-            //   success: function(jsep) {
-            //     // Got our SDP! Send our OFFER to the plugin
-            //     sfutest.send({
-            //       message: {
-            //         request: 'call',
-            //         username: 'hung',
-            //       },
-            //       jsep: jsep,
-            //     });
-            //   },
-            //   error: function(error) {
-            //     // An error occurred...
-            //   },
-            //   customizeSdp: function(jsep) {
-            //     // if you want to modify the original sdp, do as the following
-            //     // oldSdp = jsep.sdp;
-            //     // jsep.sdp = yourNewSdp;
-            //   },
-            // });
           },
           error: error => {
             Alert.alert('  -- Error attaching plugin...', error);
@@ -211,108 +186,74 @@ export default class JanusReactNative extends Component {
             console.log('🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶🥶', msg);
             var event = msg['videocall'];
             var result = msg['result'];
-            console.log(event, result);
+            console.log(event, result, jsep);
             if (result != undefined && result != null) {
               if (result.event === 'incomingcall') {
-                this.setState({incomingCall: true});
-              }
-            }
-            if (event != undefined && event != null) {
-              if (event === 'joined') {
-                myid = msg['id'];
-                this.publishOwnFeed(true);
-                this.setState({
-                  visible: false,
+                this.setState({incomingCall: true, status: 'incomingcall'});
+
+                sfutest.createAnswer({
+                  // We attach the remote OFFER
+                  jsep: jsep,
+                  // We want recvonly audio/video
+                  media: {audioSend: false, videoSend: false},
+                  success: function(ourjsep) {
+                    // Got our SDP! Send our ANSWER to the plugin
+                    sfutest.send({
+                      message: {
+                        request: 'accept',
+                        // username: 'hung',
+                      },
+                      jsep: ourjsep,
+                    });
+                  },
+                  error: function(error) {
+                    // An error occurred...
+                  },
                 });
-                if (
-                  msg['publishers'] !== undefined &&
-                  msg['publishers'] !== null
-                ) {
-                  var list = msg['publishers'];
-                  for (var f in list) {
-                    var id = list[f]['id'];
-                    var display = list[f]['display'];
-                    this.newRemoteFeed(id, display);
-                  }
-                }
-              } else if (event === 'destroyed') {
-              } else if (event === 'event') {
-                if (
-                  msg['publishers'] !== undefined &&
-                  msg['publishers'] !== null
-                ) {
-                  var list = msg['publishers'];
-                  for (var f in list) {
-                    let id = list[f]['id'];
-                    let display = list[f]['display'];
-                    this.newRemoteFeed(id, display);
-                  }
-                } else if (
-                  msg['leaving'] !== undefined &&
-                  msg['leaving'] !== null
-                ) {
-                  var leaving = msg['leaving'];
-                  var remoteFeed = null;
-                  let numLeaving = parseInt(msg['leaving']);
-                  if (this.state.remoteList.hasOwnProperty(numLeaving)) {
-                    delete this.state.remoteList.numLeaving;
-                    this.setState({
-                      remoteList: this.state.remoteList,
-                    });
-                    this.state.remoteListPluginHandle[numLeaving].detach();
-                    delete this.state.remoteListPluginHandle.numLeaving;
-                  }
-                } else if (
-                  msg['unpublished'] !== undefined &&
-                  msg['unpublished'] !== null
-                ) {
-                  var unpublished = msg['unpublished'];
-                  if (unpublished === 'ok') {
-                    sfutest.hangup();
-                    return;
-                  }
-                  let numLeaving = parseInt(msg['unpublished']);
-                  if ('numLeaving' in this.state.remoteList) {
-                    delete this.state.remoteList.numLeaving;
-                    this.setState({
-                      remoteList: this.state.remoteList,
-                    });
-                    this.state.remoteListPluginHandle[numLeaving].detach();
-                    delete this.state.remoteListPluginHandle.numLeaving;
-                  }
-                } else if (
-                  msg['error'] !== undefined &&
-                  msg['error'] !== null
-                ) {
-                }
+              }
+              if (result.event === 'hangup') {
+                this.endCall();
               }
             }
             if (jsep !== undefined && jsep !== null) {
-              sfutest.handleRemoteJsep({
-                jsep: jsep,
-              });
+              jsep = jsep;
+              if (jsep.type === 'answer') {
+                sfutest.handleRemoteJsep({
+                  jsep: jsep,
+                });
+              } else {
+                sfutest.createAnswer({
+                  // We attach the remote OFFER
+                  jsep: jsep,
+                  // We want recvonly audio/video
+                  media: {audioSend: false, videoSend: false},
+                  success: function(ourjsep) {
+                    // Got our SDP! Send our ANSWER to the plugin
+                    sfutest.send({
+                      message: {request: 'start'},
+                      jsep: ourjsep,
+                    });
+                  },
+                  error: function(error) {
+                    // An error occurred...
+                  },
+                });
+              }
             }
           },
           onlocalstream: stream => {
+            console.log('🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓');
             this.setState({
               selfViewSrc: stream.toURL(),
-            });
-            this.setState({
               selfViewSrcKey: Math.floor(Math.random() * 1000),
-            });
-            this.setState({
               status: 'ready',
             });
           },
           onremotestream: stream => {
-            console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩');
+            console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩', stream);
             this.setState({
               remoteViewSrc: stream.toURL(),
-            });
-            this.setState({
               remoteViewSrcKey: Math.floor(Math.random() * 1000),
-            });
-            this.setState({
               status: 'connecting',
             });
           },
@@ -348,22 +289,20 @@ export default class JanusReactNative extends Component {
     sfutest.createOffer({
       // No media property provided: by default,
       // it's sendrecv for audio and video
-      success: function(jsep) {
+      success: function(ourjsep) {
         // Got our SDP! Send our OFFER to the plugin
-        var body = {audio: true, video: true};
-        sfutest.send({message: body});
         sfutest.send({
           message: {
             request: 'call',
             username: 'hung',
           },
-          jsep: jsep,
+          jsep: ourjsep,
         });
       },
       error: function(error) {
         // An error occurred...
       },
-      customizeSdp: function(jsep) {
+      customizeSdp: function(ourjsep) {
         // if you want to modify the original sdp, do as the following
         // oldSdp = jsep.sdp;
         // jsep.sdp = yourNewSdp;
@@ -375,29 +314,23 @@ export default class JanusReactNative extends Component {
     console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
 
     sfutest.createAnswer({
-      // No media property provided: by default,
-      // it's sendrecv for audio and video
-      success: function(jsep) {
-        // Got our SDP! Send our OFFER to the plugin
-        // sfutest.send({
-        //   message: body,
-        //   jsep: jsep,
-        // });
+      // We attach the remote OFFER
+      jsep: jsep,
+      // We want recvonly audio/video
+      media: {audioSend: false, videoSend: false},
+      success: function(ourjsep) {
+        // Got our SDP! Send our ANSWER to the plugin
         // sfutest.send({
         //   message: {
         //     request: 'accept',
         //     // username: 'hung',
         //   },
-        //   jsep: jsep,
+        //   // message: {request: 'start'},
+        //   jsep: ourjsep,
         // });
       },
       error: function(error) {
         // An error occurred...
-      },
-      customizeSdp: function(jsep) {
-        // if you want to modify the original sdp, do as the following
-        // oldSdp = jsep.sdp;
-        // jsep.sdp = yourNewSdp;
       },
     });
   };
@@ -448,10 +381,8 @@ export default class JanusReactNative extends Component {
   };
 
   endCall = () => {
-    let unpublish = {request: 'unpublish'};
-    sfutest.send({message: unpublish});
-    janus.destroy();
-    this.setState({selfViewSrc: null, remoteViewSrc: null});
+    sfutest.hangup();
+    this.setState({selfViewSrc: null, remoteViewSrc: null, status: 'hangup'});
   };
 
   publishOwnFeed(useAudio) {
@@ -586,13 +517,18 @@ export default class JanusReactNative extends Component {
     return (
       <ScrollView style={styles.container}>
         <Text>{this.state.status}</Text>
-        {this.state.incomingCall && (
+        {/* {this.state.incomingCall && (
           <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
             <View style={styles.button}>
               <Text style={styles.buttonText}>Accept</Text>
             </View>
           </TouchableOpacity>
-        )}
+        )} */}
+        <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
+          <View style={styles.button}>
+            <Text style={styles.buttonText}>Accept</Text>
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity onPress={this.onPressButton} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>{this.state.buttonText}</Text>

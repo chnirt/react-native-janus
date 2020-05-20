@@ -35,93 +35,15 @@ import {Dimensions} from 'react-native';
 
 const dimensions = Dimensions.get('window');
 
-const configuration = {iceServers: [{url: 'stun:stun.l.google.com:19302'}]};
-const pc = new RTCPeerConnection(configuration);
-let isFront = false;
-
-//export default
-class App extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.state = {streamUrl: null};
-  }
-
-  componentDidMount() {
-    console.log('componentDidMount');
-
-    mediaDevices.enumerateDevices().then(sourceInfos => {
-      console.log(sourceInfos);
-      let videoSourceId;
-      for (let i = 0; i < sourceInfos.length; i++) {
-        const sourceInfo = sourceInfos[i];
-        if (
-          sourceInfo.kind == 'videoinput' &&
-          sourceInfo.facing == (isFront ? 'front' : 'back')
-        ) {
-          videoSourceId = sourceInfo.deviceId;
-        }
-      }
-
-      mediaDevices
-        .getUserMedia({
-          audio: true,
-          video: {
-            mandatory: {
-              minWidth: 500, // Provide your own width, height and frame rate here
-              minHeight: 1200,
-              minFrameRate: 60,
-            },
-            facingMode: isFront ? 'user' : 'environment',
-            optional: videoSourceId ? [{sourceId: videoSourceId}] : [],
-          },
-        })
-        .then(stream => {
-          // Got stream!
-          // this.state.stream = stream;
-          this.setState(previousState => ({streamUrl: stream.toURL()}));
-          console.log('Got stream !');
-          console.log('Stream ID: ' + this.state.streamUrl);
-        })
-        .catch(error => {
-          // Log error
-        });
-    });
-  }
-
-  render() {
-    return (
-      <View>
-        {
-          <RTCView
-            streamURL={this.state.streamUrl}
-            style={{width: 350, height: 600}}
-          />
-        }
-      </View>
-    );
-  }
-}
-
-pc.createOffer().then(desc => {
-  pc.setLocalDescription(desc).then(() => {
-    // Send pc.localDescription to peer
-  });
-});
-
-pc.onicecandidate = function(event) {
-  // send event.candidate to peer
-};
-
-let host = '172.16.9.91';
+let host = '192.168.30.162';
 let server = 'http://' + host + ':8088/janus';
 // let backHost = 'http://' + host + ':3000/stream';
 
-let jsep = null;
+let globalJsep = null;
 
 var janus = null;
 var videocall = null;
-// var opaqueId = 'videocalltest-' + Janus.randomString(12);
+var opaqueId = 'videocalltest-' + Janus.randomString(12);
 
 var bitrateTimer = null;
 var spinner = null;
@@ -167,24 +89,31 @@ export default class JanusReactNative extends Component {
       jsep: {},
     };
     this.janusStart.bind(this);
-    this.onPressButton.bind(this);
-    this.endCall.bind(this);
+    this.toEnd.bind(this);
   }
 
   componentDidMount() {
-    // this.janusStart();
+    this.janusStart();
   }
 
   janusStart = () => {
     this.setState({visible: true});
     janus = new Janus({
       server: server,
+      // iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
       success: () => {
         janus.attach({
           plugin: 'janus.plugin.videocall',
-          // opaqueId: opaqueId,
+          opaqueId: opaqueId,
           success: pluginHandle => {
             videocall = pluginHandle;
+            Janus.log(
+              'Plugin attached! (' +
+                videocall.getPlugin() +
+                ', id=' +
+                videocall.getId() +
+                ')',
+            );
           },
           error: error => {
             Janus.error('  -- Error attaching plugin...', error);
@@ -214,6 +143,7 @@ export default class JanusReactNative extends Component {
             Janus.debug(' ::: Got a message :::');
             Janus.debug(msg);
             var result = msg['result'];
+            globalJsep = jsep;
             if (result !== undefined && result !== null) {
               if (result['list'] !== undefined && result['list'] !== null) {
                 var list = result['list'];
@@ -230,6 +160,9 @@ export default class JanusReactNative extends Component {
                 if (event === 'registered') {
                   myusername = result['username'];
                   Janus.log('Successfully registered as ' + myusername + '!');
+                  videocall.send({
+                    message: {request: 'list'},
+                  });
                 } else if (event === 'calling') {
                   Janus.log('Waiting for the peer to answer...');
                   // TODO Any ringtone?
@@ -237,30 +170,32 @@ export default class JanusReactNative extends Component {
                 } else if (event === 'incomingcall') {
                   Janus.log('Incoming call from ' + result['username'] + '!');
                   yourusername = result['username'];
-                  // jsep = jsep;
 
                   console.log('🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗🚗');
 
-                  videocall.createAnswer({
-                    jsep: jsep,
-                    media: {data: true},
-                    success: function(jsep) {
-                      Janus.debug('Got SDP!');
-                      Janus.debug(jsep);
-                      var body = {
-                        request: 'accept',
-                      };
-                      videocall.send({
-                        message: body,
-                        jsep: jsep,
-                      });
-                    },
-                    error: function(error) {
-                      Janus.error('WebRTC error:', error);
-                    },
-                  });
+                  // videocall.createAnswer({
+                  //   jsep: jsep,
+                  //   media: {data: true},
+                  //   simulcast: false,
+                  //   success: function(jsep1) {
+                  //     Janus.debug('Got SDP!');
+                  //     Janus.debug(jsep1);
+                  //     var body = {
+                  //       request: 'accept',
+                  //     };
+                  //     videocall.send({
+                  //       message: body,
+                  //       jsep: jsep1,
+                  //     });
+                  //   },
+                  //   error: function(error) {
+                  //     Janus.error('WebRTC error:', error);
+                  //   },
+                  // });
+                  this.setState({incomingCall: true});
                   console.log('🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀');
                 } else if (event === 'accepted') {
+                  console.log('🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀');
                   var peer = result['username'];
                   if (peer === null || peer === undefined) {
                     Janus.log('Call started!');
@@ -306,7 +241,7 @@ export default class JanusReactNative extends Component {
                       ')!',
                   );
                   // Reset status
-                  this.endCall();
+                  this.toEnd();
                 }
               }
             } else {
@@ -318,22 +253,24 @@ export default class JanusReactNative extends Component {
             }
           },
           onlocalstream: stream => {
-            console.log('🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓');
+            console.log('🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓🏓', stream.toURL());
             Janus.debug(' ::: Got a local stream :::');
             Janus.debug(stream);
 
             this.setState({
               selfViewSrc: stream.toURL(),
-              selfViewSrcKey: Math.floor(Math.random() * 1000),
+              selfViewSrcKey: Math.floor(Math.random() * 1000) + 1,
               status: 'ready',
             });
           },
           onremotestream: stream => {
-            console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩', stream);
+            console.log('🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩🧩', stream.toURL());
+            Janus.debug(' ::: Got a remote stream :::');
+            Janus.debug(stream);
 
             this.setState({
               remoteViewSrc: stream.toURL(),
-              remoteViewSrcKey: Math.floor(Math.random() * 1000),
+              remoteViewSrcKey: Math.floor(Math.random() * 1000) + 2,
               status: 'connecting',
             });
           },
@@ -367,7 +304,7 @@ export default class JanusReactNative extends Component {
     videocall.send({message: register});
   }
 
-  callOffer = () => {
+  doCall = () => {
     console.log('🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟🎟 call offer');
 
     // Call this user
@@ -386,12 +323,13 @@ export default class JanusReactNative extends Component {
     });
   };
 
-  acceptAnswer = () => {
+  doAccept = () => {
     console.log('✅✅✅✅✅✅✅✅✅✅✅✅ accept answer');
 
     videocall.createAnswer({
-      jsep: jsep,
+      jsep: globalJsep,
       media: {data: true},
+      simulcast: false,
       success: function(jsep) {
         Janus.debug('Got SDP!');
         Janus.debug(jsep);
@@ -407,14 +345,6 @@ export default class JanusReactNative extends Component {
         Janus.error('WebRTC error:', error);
       },
     });
-  };
-
-  onPressButton = () => {
-    if (!this.state.publish) {
-      this.janusStart();
-    } else {
-      this.unpublishOwnFeed();
-    }
   };
 
   switchVideoType = () => {
@@ -451,7 +381,7 @@ export default class JanusReactNative extends Component {
     }
   };
 
-  endCall = () => {
+  doHangup = () => {
     var hangup = {request: 'hangup'};
     videocall.send({message: hangup});
     videocall.hangup();
@@ -464,28 +394,28 @@ export default class JanusReactNative extends Component {
       <ScrollView style={styles.container}>
         <Text>{this.state.status}</Text>
         {this.state.incomingCall && (
-          <TouchableOpacity onPress={this.acceptAnswer} underlayColor="white">
+          <TouchableOpacity onPress={this.doAccept} underlayColor="white">
             <View style={styles.button}>
               <Text style={styles.buttonText}>Accept</Text>
             </View>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={this.onPressButton} underlayColor="white">
+        {/* <TouchableOpacity onPress={this.onPressButton} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>{this.state.buttonText}</Text>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity onPress={this.registerUsername} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>Register Username</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={this.callOffer} underlayColor="white">
+        <TouchableOpacity onPress={this.doCall} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>Call</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={this.endCall} underlayColor="white">
+        <TouchableOpacity onPress={this.doHangup} underlayColor="white">
           <View style={styles.button}>
             <Text style={styles.buttonText}>End</Text>
           </View>
@@ -524,16 +454,6 @@ export default class JanusReactNative extends Component {
             style={{width: 350, height: 600}}
           />
         )}
-        {this.state.remoteList &&
-          Object.keys(this.state.remoteList).map((key, index) => {
-            return (
-              <RTCView
-                key={Math.floor(Math.random() * 1000)}
-                streamURL={this.state.remoteList[key]}
-                style={styles.remoteView}
-              />
-            );
-          })}
       </ScrollView>
     );
   }
@@ -542,7 +462,6 @@ export default class JanusReactNative extends Component {
 const styles = StyleSheet.create({
   container: {
     paddingTop: 60,
-    // alignItems: 'center',
   },
   button: {
     marginBottom: 30,

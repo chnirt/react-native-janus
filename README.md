@@ -70,3 +70,9 @@ If you integrate to your new project, following below steps:
 
 - [Inspiration](https://github.com/baconcheese113/react-native-webrtc-minimal)
 - etc
+
+## Error
+
+- https://support.medialooks.com/hc/en-us/articles/360002981111-SFU-Selective-Forwarding-Unit-
+
+- https://github.com/meetecho/janus-gateway/issues/90
